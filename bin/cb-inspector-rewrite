@@ -1,0 +1,99 @@
+#!/usr/bin/env node
+
+var _ = require("lodash");
+var fs = require("fs");
+var glob = require("glob");
+var path = require("path");
+var rocambole = require("rocambole");
+
+var cbIDRx = /_?cb_?/;
+var removeMode = false;
+
+// returns "" or the string name of the cb arg
+function cbCallerName(node) {
+	if (node.type !== "FunctionDeclaration" && node.type !== "FunctionExpression") return "";
+	if (node.params.length === 0) return "";
+	var lastParam = node.params[node.params.length-1];
+	if (lastParam.type!=="Identifier" || !cbIDRx.test(lastParam.name)) return "";
+	return lastParam.name;
+}
+
+function getLine(data, node) {
+	var startChar = node.startToken.range[0];
+	return data.slice(0,startChar).split("\n").length;
+}
+
+// node must be a valid function declaration or expression
+// just checks that the first part of the body is the CB_INSPECTOR__START comment
+function alreadyInjected(node) {
+	return node.body.startToken.next.type === "BlockComment" && node.body.startToken.next.value === "CB_INSPECTOR__START";
+}
+
+// node must pass 'alreadyInjected()' test
+// links the '{' token of the body to the next one after CB_INSPECTOR__END comment 
+function removeInjection(node) {
+	var start = node.body.startToken;
+
+	var n = start.next;
+	while (n.type !== "BlockComment" || n.value !== "CB_INSPECTOR__END") {
+		if (n == node.body.endToken) {
+			throw new Error("Couldn't find the end of injection code!");
+		}
+		n = n.next;
+	};
+	start.next = n.next;
+	n.prev = start;
+}
+
+
+var files = _.chain(process.argv.slice(2))
+.filter(function(arg){
+	if (arg === "--remove" || arg === "-u" || arg === "-r" || arg === "--undo") {
+		removeMode = true;
+		return false;
+	} else {
+		return true;
+	}
+})
+.map(function(file){
+	var stat = fs.statSync(file);
+	if (stat.isFile()) {
+		return file;
+	} else if (stat.isDirectory()) {
+		return glob.sync(path.join(file, "**", "*.js"));
+	} else {
+		console.warn("Skipping unknown '" + file + "'");
+	}
+})
+.flatten()
+.value();
+
+var injected = 0;
+var injectedFiles = 0;
+_.each(files, function(file){
+	file = path.resolve(file);
+	var data = fs.readFileSync(file).toString();
+	var ast;
+	try {
+		ast = rocambole.parse(data);
+	} catch(e) {
+		console.warn("WARN: skipping file, failed to parse:", file);
+		console.warn(e.message.replace(/^/mg,"WARN:   "));
+		console.warn();
+		return;
+	}
+	rocambole.walk(ast, function(node){
+		var cbName = cbCallerName(node);
+		if (!cbName) return;
+		injected++;
+		if (alreadyInjected(node)) removeInjection(node);
+		var fnName = "";
+		if (node.id !== null) fnName = node.id.name;
+		if (!removeMode) node.body.startToken.value += "/*CB_INSPECTOR__START*/" + cbName + "= __cb_inspector_wrap(" + cbName + ",{name: \"" + fnName + "\",file:\"" + file + "\", line: " + getLine(data, node) + "});/*CB_INSPECTOR__END*/";
+	});
+	fs.writeFileSync(file, ast.toString());
+	injectedFiles++;
+});
+
+var msg = removeMode ? "Cleared hooks from" : "Injected hooks into";
+console.log(msg,injected,"functions in",injectedFiles,"file(s).");
