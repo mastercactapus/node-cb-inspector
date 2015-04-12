@@ -99,3 +99,15 @@ cb-inspector-rewrite -e node_modules/npm node_modules/.bin/npm
 node_modules/.bin/npm install some-set-of-packages-that-causes-the-behavior
 
 ```
+
+Example Output:
+
+For this example, I added a return statement to the dedup function on line 31 of `dedup.js` so it would not fire the callback.
+
+```
+node_modules/.bin/npm dedup
+
+cb never called -- errorHandler args:1 -- was passed to 1 handler(s) (none called back)
+    Passed to function dedupe_ at /home/nathan/projects/src/github.com/mastercactapus/node-cb-inspector/temp/node_modules/npm/lib/dedupe.js:31:0
+npm ERR! cb() never called!
+```
