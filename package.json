@@ -1,12 +1,12 @@
 {
   "name": "cb-inspector",
   "version": "1.0.0",
-  "description": "",
+  "description": "cb-inspector is an experimental debugging tool for code making heavy use of callbacks.",
   "main": "index.js",
   "bin": {
     "cb-inspector-rewrite": "bin/cb-inspector-rewrite"
   },
-  "author": "",
+  "author": "Nathan Caza",
   "license": "ISC",
   "dependencies": {
     "glob": "^5.0.5",
