@@ -1,6 +1,7 @@
 var WeakMap = require("weakmap");
 var _ = require("lodash");
 var assert = require("assert");
+var http = require("http");
 
 var callbackMap = new WeakMap();
 var allCallbacks = [];
@@ -93,24 +94,41 @@ exports.pendingCallbacks = _.ary(_.partial(_.reject, allCallbacks, "called"),0);
 exports.completeCallbacks = _.ary(_.partial(_.filter, allCallbacks, "called"),0);
 exports.allCallbacks = _.ary(_.partial(_.clone, allCallbacks),0);
 
-exports.global = function(){
-	if (!global.__cb_inspector_wrap) {
-		global.__cb_inspector_wrap = wrapCb;
-	} else {
-		console.warn("ERROR: cb-inspector already registered in this process.");
-	}
-	return exports;
-}
-
+var willReportOnExit = false;
 exports.reportOnExit = function(){
+	if (willReportOnExit) return exports;
+	willReportOnExit = true;
 	process.on("exit", function(){
 		exports.pendingCallbacks().forEach(function(data){
 			console.log("cb never called -- %s args:%d -- was passed to %d handler(s) (none called back)", data.name, data.argCount, data.handlers.length);
 			data.handlers.forEach(function(handler){
-				console.log("    Passed to function %s at %s:%d", handler.meta.name, handler.meta.file, handler.meta.line)
+				console.log("    Passed to function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
 			});
 		});
 	});
 	return exports;
 }
+var httpListeners = {};
+exports.httpReporter = function(port) {
+	if (httpListeners[port]) return exports;
 
+	var srv = http.createServer(function(req, res){
+		res.setHeader("Content-Type", "application/json");
+		switch (req.url) {
+			case "/all":
+				res.end(JSON.stringify(exports.allCallbacks()));
+			break;
+			case "/complete":
+				res.end(JSON.stringify(exports.completeCallbacks()));
+			break;
+			case "/pending":
+			default:
+				res.end(JSON.stringify(exports.pendingCallbacks()));
+		}
+	});
+	srv.listen(port);
+	srv.unref(); //don't keep the process open
+	httpListeners[port] = true;
+
+	return exports;
+}

@@ -5,9 +5,33 @@ var fs = require("fs");
 var glob = require("glob");
 var path = require("path");
 var rocambole = require("rocambole");
+var _module = require("module");
 
 var cbIDRx = /_?cb_?/;
 var removeMode = false;
+var exitReport = false;
+var httpPort = null;
+
+//remove all cb inspector code
+function stripAllCbCode(ast) {
+	var num = 0;
+	var n = ast.startToken;
+	while (true) {
+		while (n.type !== "BlockComment" || n.value.trim() !== "CB_INSPECTOR__START") {
+			n = n.next;
+			if (!n) return num;
+		}
+		var start = n;
+		while (n.type !== "BlockComment" || n.value.trim() !== "CB_INSPECTOR__END") {
+			n = n.next;
+			if (!n) return num;
+		}
+		num++;
+		start.prev.next = n.next;
+		n.next.prev = start.prev;
+	}
+	return num;
+}
 
 // returns "" or the string name of the cb arg
 function cbCallerName(node) {
@@ -18,45 +42,30 @@ function cbCallerName(node) {
 	return lastParam.name;
 }
 
-function getLine(data, node) {
-	var startChar = node.startToken.range[0];
-	return data.slice(0,startChar).split("\n").length;
-}
-
-// node must be a valid function declaration or expression
-// just checks that the first part of the body is the CB_INSPECTOR__START comment
-function alreadyInjected(node) {
-	return node.body.startToken.next.type === "BlockComment" && node.body.startToken.next.value === "CB_INSPECTOR__START";
-}
-
-// node must pass 'alreadyInjected()' test
-// links the '{' token of the body to the next one after CB_INSPECTOR__END comment 
-function removeInjection(node) {
-	var start = node.body.startToken;
-
-	var n = start.next;
-	while (n.type !== "BlockComment" || n.value !== "CB_INSPECTOR__END") {
-		if (n == node.body.endToken) {
-			throw new Error("Couldn't find the end of injection code!");
-		}
-		n = n.next;
-	};
-	start.next = n.next;
-	n.prev = start;
-}
-
-
 var files = _.chain(process.argv.slice(2))
 .filter(function(arg){
-	if (arg === "--remove" || arg === "-u" || arg === "-r" || arg === "--undo") {
+	if (arg === "--remove" || arg === "-r") {
 		removeMode = true;
 		return false;
+	} else if (arg === "-h" || arg === "--help") {
+		console.log("Usage: cb-inspector-rewrite [-hre] <file(s)>");
+		console.log("  -h, --help          This text.");
+		console.log("  -r, --remove        Remove all handlers/hooks.");
+		console.log("  -e, --exit-report   Report any pending callbacks on process exit (has no effect if -r is specified).");
+		console.log("  --http=<port>       Listen for HTTP requests, reporting status of callbacks as JSON.");
+		process.exit(0);
+		return false;
+	} else if (arg === "-e" || arg === "--exit-report") {
+		exitReport = true;
+		return false;
+	} else if (/^--http=\d+$/.test(arg)) {
+		httpPort = /^--http=(\d+)$/.exec(arg)[1];
 	} else {
 		return true;
 	}
 })
-.map(function(file){
-	var stat = fs.statSync(file);
+.map(function(file)
+{	var stat = fs.statSync(file);
 	if (stat.isFile()) {
 		return file;
 	} else if (stat.isDirectory()) {
@@ -70,28 +79,67 @@ var files = _.chain(process.argv.slice(2))
 
 var injected = 0;
 var injectedFiles = 0;
+
+var hashBangRx = /^\#\!.*\n/;
+
 _.each(files, function(file){
 	file = path.resolve(file);
 	var data = fs.readFileSync(file).toString();
+	var header = "";
+	var m = hashBangRx.exec(data);
+
+	if (m) {
+		header = m[0];
+		data = data.replace(hashBangRx,"");
+	}
+
+	data = _module.wrapper[0] + data + _module.wrapper[1];
+
 	var ast;
 	try {
-		ast = rocambole.parse(data);
+		ast = rocambole.parse(data, {loc: true});
 	} catch(e) {
 		console.warn("WARN: skipping file, failed to parse:", file);
 		console.warn(e.message.replace(/^/mg,"WARN:   "));
 		console.warn();
 		return;
 	}
-	rocambole.walk(ast, function(node){
-		var cbName = cbCallerName(node);
-		if (!cbName) return;
+	//start with a clean slate
+	var stripped = stripAllCbCode(ast);
+
+	if (!removeMode) {
+		rocambole.walk(ast, function(node){
+			var cbName = cbCallerName(node);
+			if (!cbName) return;
+			injected++;
+			var fnName = "";
+			if (node.id !== null) fnName = node.id.name;
+			node.body.startToken.value += "/*CB_INSPECTOR__START*/" + cbName + "= __cb_inspector_wrap(" + cbName + ",{name: \"" + fnName + "\",file:\"" + file + "\", line: " + node.loc.start.line + ", column:" + node.loc.start.column + "});/*CB_INSPECTOR__END*/";
+		});
+	} else {
+		injected = stripped;
+	}
+
+	var strData = ast.toString();
+
+	strData = strData.replace(_module.wrapper[0], "");
+	strData = strData.slice(0, strData.length - _module.wrapper[1].length);
+
+	if (removeMode) {
+		strData = header + strData;
+	} else {
 		injected++;
-		if (alreadyInjected(node)) removeInjection(node);
-		var fnName = "";
-		if (node.id !== null) fnName = node.id.name;
-		if (!removeMode) node.body.startToken.value += "/*CB_INSPECTOR__START*/" + cbName + "= __cb_inspector_wrap(" + cbName + ",{name: \"" + fnName + "\",file:\"" + file + "\", line: " + getLine(data, node) + "});/*CB_INSPECTOR__END*/";
-	});
-	fs.writeFileSync(file, ast.toString());
+		var wrapName = ".wrap";
+		if (exitReport) {
+			wrapName = ".reportOnExit()" + wrapName;
+		}
+		if (httpPort) {
+			wrapName = ".httpReporter(" + httpPort + ")" + wrapName;
+		}
+		strData = header + "/*CB_INSPECTOR__START*/var __cb_inspector_wrap = require(\"" + path.resolve(__dirname, "../index.js") + "\")" + wrapName + ";/*CB_INSPECTOR__END*/" + strData;
+	}
+
+	fs.writeFileSync(file, strData);
 	injectedFiles++;
 });
 
