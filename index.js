@@ -107,6 +107,10 @@ exports.reportOnExit = function(all){
 	if (willReportOnExit) return exports;
 	willReportOnExit = true;
 	process.on("exit", function(){
+		if (_.all(allCallbacks, "called")) {
+			// if all callbacks were called, don't log anything
+			return;
+		}
 		var cbs = all ? exports.allCallbacks() : exports.pendingCallbacks();
 		cbs.forEach(function(data){
 			if (data.called === 0) {
@@ -115,7 +119,7 @@ exports.reportOnExit = function(all){
 					console.log("    Passed to function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
 				});
 			} else {
-				console.log("cb#%d called %d time(s) -- %s args:%d -- was passed to %d handler(s) (none called back)", data.index, data.called, data.name, data.argCount, data.handlers.length);
+				console.log("cb#%d called %d time(s) -- %s args:%d -- was passed to %d handler(s)", data.index, data.called, data.name, data.argCount, data.handlers.length);
 				data.handlers.forEach(function(handler){
 					if (handler.called === 0) {
 						console.log("    Passed to but not called -- function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
