@@ -5,6 +5,7 @@ var http = require("http");
 
 var callbackMap = new WeakMap();
 var allCallbacks = [];
+var callbackId = 0;
 
 // registerCallback returns an unregister function
 // it also adds tracking info to the weakmap that should include
@@ -15,18 +16,25 @@ var allCallbacks = [];
 // 
 // also we know globally how many times it was called (so we can quickly see if it wasn't called at all)
 function registerCallback(cb, opts) {
-	var v = callbackMap.get(cb);
-	if (!v) {
+	var i = callbackMap.get(cb);
+	var v;
+	if (_.isUndefined(i)) {
 		v = {
 			name: cb.name,
 			argCount: cb.length,
 			handlers: [],
 			called: 0,
+			unixTimestamp: Date.now(),
 		};
-		callbackMap.set(cb, v);
-		allCallbacks.push(v);
+		i = allCallbacks.push(v) - 1;
+		v.index = i;
+		callbackMap.set(cb, i);
+	} else {
+		v = allCallbacks[i];
 	}
+
 	var handleObj = {
+		unixTimestamp: Date.now(),
 		meta: opts,
 		called: 0,
 	};
@@ -100,7 +108,7 @@ exports.reportOnExit = function(){
 	willReportOnExit = true;
 	process.on("exit", function(){
 		exports.pendingCallbacks().forEach(function(data){
-			console.log("cb never called -- %s args:%d -- was passed to %d handler(s) (none called back)", data.name, data.argCount, data.handlers.length);
+			console.log("cb#%d never called -- %s args:%d -- was passed to %d handler(s) (none called back)", data.index, data.name, data.argCount, data.handlers.length);
 			data.handlers.forEach(function(handler){
 				console.log("    Passed to function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
 			});
