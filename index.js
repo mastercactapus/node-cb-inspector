@@ -103,15 +103,27 @@ exports.completeCallbacks = _.ary(_.partial(_.filter, allCallbacks, "called"),0)
 exports.allCallbacks = _.ary(_.partial(_.clone, allCallbacks),0);
 
 var willReportOnExit = false;
-exports.reportOnExit = function(){
+exports.reportOnExit = function(all){
 	if (willReportOnExit) return exports;
 	willReportOnExit = true;
 	process.on("exit", function(){
-		exports.pendingCallbacks().forEach(function(data){
-			console.log("cb#%d never called -- %s args:%d -- was passed to %d handler(s) (none called back)", data.index, data.name, data.argCount, data.handlers.length);
-			data.handlers.forEach(function(handler){
-				console.log("    Passed to function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
-			});
+		var cbs = all ? exports.allCallbacks() : exports.pendingCallbacks();
+		cbs.forEach(function(data){
+			if (data.called === 0) {
+				console.log("cb#%d never called -- %s args:%d -- was passed to %d handler(s) (none called back)", data.index, data.name, data.argCount, data.handlers.length);
+				data.handlers.forEach(function(handler){
+					console.log("    Passed to function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
+				});
+			} else {
+				console.log("cb#%d called %d time(s) -- %s args:%d -- was passed to %d handler(s) (none called back)", data.index, data.called, data.name, data.argCount, data.handlers.length);
+				data.handlers.forEach(function(handler){
+					if (handler.called === 0) {
+						console.log("    Passed to but not called -- function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
+					} else {
+						console.log("    Passed to and called %d time(s) -- function %s at %s:%d:%d", handler.called, handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
+					}
+				});
+			}
 		});
 	});
 	return exports;

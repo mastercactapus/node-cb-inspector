@@ -31,10 +31,13 @@ Callback status data (from `.pendingCallbacks`, `.allCallbacks`, `.completedCall
 ```javascript
 {
 	name: "cb", //cb.name -- e.g function mycb(){} == mycb
+	index: 0, //the order the callback was registered in
 	argCount: 1, //cb.length -- e.g. function(a,b,c){} == 3
 	called: 0, //number of times the callback has been called (since being registered)
+	unixTimestamp: 0, //unix timestamp of the first registration (not guaranteed to match the handler)
 	handlers: [{ //array of handlers -- functions the callback was passed as an argument to
 		called: 0, //same as above, but specific to this handler
+		unixTimestamp: 0, //time this handler was registered
 		meta: {
 			name: "", //name of the handler function, as above
 			file: "", //full path to the file the handler can be found in
@@ -56,7 +59,7 @@ Methods:
 
 `.allCallbacks` - returns a list of all (pending and completed) callbacks
 
-`.reportOnExit` - registers a `process.on("exit")` handler to log any callbacks that were never called
+`.reportOnExit(all)` - registers a `process.on("exit")` handler to log if any callbacks were never called. If `all` is true, then all callback states will be logged every time.
 
 `.httpReporter(port)` - listens on a given port for http requests, returning callback data, supports `/all`, `/pending`, `/complete`. All other routes (including `/`) will respond with `/pending`
 
@@ -79,6 +82,7 @@ Usage: cb-inspector-rewrite [-hre] <file(s)>
   -h, --help          This text.
   -r, --remove        Remove all handlers/hooks.
   -e, --exit-report   Report any pending callbacks on process exit (has no effect if -r is specified).
+  -a, --all-report    Report status of ALL callbacks (including completed) implies --exit-report
   --http=<port>       Listen for HTTP requests, reporting status of all callbacks.
 ```
 

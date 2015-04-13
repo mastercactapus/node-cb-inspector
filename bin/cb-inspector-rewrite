@@ -10,6 +10,7 @@ var _module = require("module");
 var cbIDRx = /(_?cb_?|callback|done)/;
 var removeMode = false;
 var exitReport = false;
+var allReport = false;
 var httpPort = null;
 
 //remove all cb inspector code
@@ -52,8 +53,13 @@ var files = _.chain(process.argv.slice(2))
 		console.log("  -h, --help          This text.");
 		console.log("  -r, --remove        Remove all handlers/hooks.");
 		console.log("  -e, --exit-report   Report any pending callbacks on process exit (has no effect if -r is specified).");
+		console.log("  -a, --all-report    Report status of ALL callbacks (including completed) implies --exit-report");
 		console.log("  --http=<port>       Listen for HTTP requests, reporting status of callbacks as JSON.");
 		process.exit(0);
+		return false;
+	} else if (arg === "-a" || arg === "--all-report") {
+		exitReport = true;
+		allReport = true;
 		return false;
 	} else if (arg === "-e" || arg === "--exit-report") {
 		exitReport = true;
