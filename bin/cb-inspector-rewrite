@@ -7,7 +7,7 @@ var path = require("path");
 var rocambole = require("rocambole");
 var _module = require("module");
 
-var cbIDRx = /_?cb_?/;
+var cbIDRx = /(_?cb_?|callback|done)/;
 var removeMode = false;
 var exitReport = false;
 var httpPort = null;
@@ -64,8 +64,8 @@ var files = _.chain(process.argv.slice(2))
 		return true;
 	}
 })
-.map(function(file)
-{	var stat = fs.statSync(file);
+.map(function(file){
+	var stat = fs.statSync(file);
 	if (stat.isFile()) {
 		return file;
 	} else if (stat.isDirectory()) {
