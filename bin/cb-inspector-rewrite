@@ -141,7 +141,7 @@ _.each(files, function(file){
 		injected++;
 		var wrapName = ".wrap";
 		if (exitReport) {
-			wrapName = ".reportOnExit()" + wrapName;
+			wrapName = ".reportOnExit(" + !!allReport + ")" + wrapName;
 		}
 		if (httpPort) {
 			wrapName = ".httpReporter(" + httpPort + ")" + wrapName;
