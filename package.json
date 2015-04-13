@@ -1,6 +1,6 @@
 {
   "name": "cb-inspector",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "cb-inspector is an experimental debugging tool for code making heavy use of callbacks.",
   "main": "index.js",
   "bin": {
