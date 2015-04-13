@@ -75,6 +75,10 @@ var files = _.chain(process.argv.slice(2))
 	}
 })
 .flatten()
+.filter(function(file){
+	var stat = fs.statSync(file);
+	return stat.isFile();
+})
 .value();
 
 var injected = 0;
