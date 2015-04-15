@@ -124,6 +124,9 @@ exports.reportOnExit = function(all){
 				console.log("cb#%d never called -- %s args:%d -- was passed to %d handler(s) (none called back)", data.index, data.name, data.argCount, data.handlers.length);
 				data.handlers.forEach(function(handler){
 					console.log("    Passed to function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
+					for (var i=0;i<handler.log.length;i++){
+						console.log("        Log: ", handler.log[i]);
+					}
 				});
 			} else {
 				console.log("cb#%d called %d time(s) -- %s args:%d -- was passed to %d handler(s)", data.index, data.called, data.name, data.argCount, data.handlers.length);
@@ -132,6 +135,9 @@ exports.reportOnExit = function(all){
 						console.log("    Passed to but not called -- function %s at %s:%d:%d", handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
 					} else {
 						console.log("    Passed to and called %d time(s) -- function %s at %s:%d:%d", handler.called, handler.meta.name, handler.meta.file, handler.meta.line, handler.meta.column);
+					}
+					for (var i=0;i<handler.log.length;i++){
+						console.log("        Log: ", handler.log[i]);
 					}
 				});
 			}
