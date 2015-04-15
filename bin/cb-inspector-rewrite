@@ -12,6 +12,7 @@ var removeMode = false;
 var exitReport = false;
 var allReport = false;
 var httpPort = null;
+var matchName = "";
 
 //remove all cb inspector code
 function stripAllCbCode(ast) {
@@ -40,6 +41,7 @@ function cbCallerName(node) {
 	if (node.params.length === 0) return "";
 	var lastParam = node.params[node.params.length-1];
 	if (lastParam.type!=="Identifier" || !cbIDRx.test(lastParam.name)) return "";
+	if (matchName && (node.id || node.id.name.indexOf(matchName) === -1)) return "";
 	return lastParam.name;
 }
 
@@ -54,6 +56,7 @@ var files = _.chain(process.argv.slice(2))
 		console.log("  -r, --remove        Remove all handlers/hooks.");
 		console.log("  -e, --exit-report   Report any pending callbacks on process exit (has no effect if -r is specified).");
 		console.log("  -a, --all-report    Report status of ALL callbacks (including completed) implies --exit-report");
+		console.log("  --name=<substr>     Only add monitoring code to functions with a name containing this substring.")
 		console.log("  --http=<port>       Listen for HTTP requests, reporting status of callbacks as JSON.");
 		process.exit(0);
 		return false;
@@ -66,6 +69,8 @@ var files = _.chain(process.argv.slice(2))
 		return false;
 	} else if (/^--http=\d+$/.test(arg)) {
 		httpPort = /^--http=(\d+)$/.exec(arg)[1];
+	} else if (/^--name=.+$/.test(arg)) {
+		matchName = /^--name=(.+)$/.exec(arg)[1];
 	} else {
 		return true;
 	}
