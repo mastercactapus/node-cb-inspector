@@ -2,6 +2,7 @@ var WeakMap = require("weakmap");
 var _ = require("lodash");
 var assert = require("assert");
 var http = require("http");
+var util = require("util");
 
 var callbackMap = new WeakMap();
 var allCallbacks = [];
@@ -37,11 +38,17 @@ function registerCallback(cb, opts) {
 		unixTimestamp: Date.now(),
 		meta: opts,
 		called: 0,
+		log: [],
 	};
 
 	v.handlers.push(handleObj);
+	var newCb = _.partial(callbackCalled, v, handleObj);
+	newCb.Logf = _.partial(cbLog, handleObj.log);
+	return newCb;
+}
 
-	return _.partial(callbackCalled, v, handleObj);
+function cbLog(entries /*, ... */) {
+	return entries.push(util.format.apply(util, [].slice.call(arguments,1)));
 }
 
 // increment the .called properties so we can track things
